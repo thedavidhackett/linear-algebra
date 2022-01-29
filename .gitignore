@@ -1,0 +1,7 @@
+*.pdf
+*.HEIC
+*.jpg
+*.jpeg
+*.png
+.DS_store
+*-checkpoint.ipynb
