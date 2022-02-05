@@ -5,3 +5,4 @@
 *.png
 .DS_store
 *-checkpoint.ipynb
+__pycache__
