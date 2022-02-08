@@ -61,6 +61,7 @@ def solve_inverse(A : np.ndarray, b_list : List[np.ndarray]) -> List[np.ndarray]
 
     # x = Ainv * b
     for b in b_list:
+        b = np.copy(b)
         solutions.append(np.dot(Ainv, b))
     return solutions
 
@@ -87,6 +88,7 @@ def solve_lu(A : np.ndarray, b_list : List[np.ndarray]) -> List[np.ndarray]:
     U, L = forward_elimination_factorize(A)
 
     for b in b_list:
+        b = np.copy(b)
         # forward substitution to solve Lc = b
         c = forward_substitution(L, b)
         # backward substitution to solve Ux = c
@@ -289,8 +291,8 @@ def test_solve_linear_system(solve_func : Callable, n_list : List[int], k : int)
                 print(f"Failed asserting {x} was solution for {A}x = {b}")
                 return
 
-        # Will only print this if no assertion fails
-        print("Function passes all tests")
+    # Will only print this if no assertion fails
+    print("Function passes all tests")
 
 
 def time_solve_functions() -> None:
@@ -306,8 +308,8 @@ def time_solve_functions() -> None:
         If the functions produce the wrong answer or if the inputs to the
     functions are modified.
     """
-    n_list : List[int] = [2, 4, 8, 32]
-    k_list : List[int] = [1, 2, 4, 16]
+    n_list : List[int] = [2, 4, 8, 32, 64]
+    k_list : List[int] = [1, 2, 4, 16, 32]
     funcs : Dict[str, Callable] = {
         "Solve Elimination" : solve_elimination,
         "Solve Inverse" : solve_inverse,
