@@ -2,16 +2,16 @@ import numpy as np
 from typing import List, Optional, Tuple
 
 def forward_elimination(A : np.ndarray, b : Optional[np.ndarray] = None) -> \
-    Tuple[np.ndarray, list, Optional[np.ndarray]]:
+    Tuple[np.ndarray, list, int, Optional[np.ndarray]]:
     """Performs forward elimination on a matrix while modifying a vector or
-    matrix with the row actions.
+    matrix with the row actions. Cannot handle row exchanges.
 
     Parameters
     ----------
     A : numpy.ndarray
         A m x n sized matrix to perform forward elimination on, the left side
         of Ax = b
-    b : numpy.ndarray
+    b : numpy.ndarray, optional
         A n sized vector representing the right side of Ax = b
 
     Returns
@@ -19,11 +19,15 @@ def forward_elimination(A : np.ndarray, b : Optional[np.ndarray] = None) -> \
     Tuple[numpy.ndarray, list, numpy.ndarray]
         A tuple containing the matrix A in row echelon form, a list of pivots
         with the index representing the row for the pivot and the value
-        representing the column of the pivot. Optionally a vector b with
-        the same row operations applied to it as on A.
+        representing the column of the pivot and the rank of the matrix.
+        Optionally a vector b with the same row operations applied to it as on A.
     """
     pivots : list = []
-
+    A = A.copy()
+    try:
+        b = b.copy()
+    except AttributeError:
+        pass
     # Using i and j since the col, j, no longer needs to be the same as the row, i
     i : int = 0
     j : int = 0
@@ -39,16 +43,17 @@ def forward_elimination(A : np.ndarray, b : Optional[np.ndarray] = None) -> \
             l = A[i + k][j]/A[i][j]
             # Performs row operation on A
             A[i + k] = A[i + k] - (A[i] * l)
-            # For elimination this line solves b
-            # For inverse it performs Gauss Elimination
-            if len(b) > 0:
+            # Perform the same row operation on b if present
+            try:
                 b[i + k] = b[i + k] - (b[i] * l)
+            except TypeError:
+                pass
             k += 1
 
         i += 1
         j += 1
 
-    return A, pivots, b
+    return A, pivots, len(pivots), b
 
 def solve_completely(A : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """ Finds the complete solution xp + xn for Ax + b given a matrix A and a
@@ -65,12 +70,10 @@ def solve_completely(A : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.nda
     -------
     Tuple[np.ndarray, np.ndarray]:
         A tuple with the first array representing a particular solution (xp) to
-        Ax = b and the second array being a matrix xn with reach row representing a
-        vector in N(A)
+        Ax = b and the second array being a matrix xn with reach column
+        representing a vector in N(A)
     """
-    A = A.copy()
-    b = b.copy()
-    A, pivots, b = forward_elimination(A, b)
+    A, pivots, _, b = forward_elimination(A, b)
 
     # Backward substitution to get particular solution xp
     xp : np.ndarray = np.zeros(len(A[0]))
@@ -91,19 +94,23 @@ def solve_completely(A : np.ndarray, b : np.ndarray) -> Tuple[np.ndarray, np.nda
             free_cols.append(i)
 
     # Create an empty matrix for xn where each row will correspond to a free col
-    # If there aren't any free cols make xn only include the 0 vector
-    xn : np.ndarray = np.zeros((len(free_cols), len(A[0]))) if len(free_cols) > 0 else np.zeros((1, len(A(0))))
-    # For each free col find the special solution using backward substitution
-    for i, free in enumerate(free_cols):
+    xn : np.ndarray
+    if len(free_cols) > 0 and len(A[0]) >= len(A):
+        xn = np.zeros((len(A[0]), len(free_cols)))
+        # For each free col find the special solution using backward substitution
+        for i, free in enumerate(free_cols):
         # Set the free variable that we are currently on to one
-        xn[i][free] = 1
-        # Only need to solve for the pivot rows
-        for j in range(len(pivots) - 1, -1, -1):
-            answer = 0
-            for k in range(len(A[0]) - 1, pivots[j], -1):
-                answer = answer - xn[i][k] * A[j][k]
+            xn[free][i] = 1
+            # Only need to solve for the pivot rows
+            for j in range(len(pivots) - 1, -1, -1):
+                answer = 0
+                for k in range(len(A[0]) - 1, pivots[j], -1):
+                    answer = answer - xn[k][i] * A[j][k]
 
-            xn[i][pivots[j]] = answer / A[j][pivots[j]]
+                xn[pivots[j]][i] = answer / A[j][pivots[j]]
+    # If there aren't any free cols or row > col make xn only include the 0 vector
+    else:
+        xn = np.zeros((len(A[0]), 1))
 
     return xp, xn
 
@@ -127,14 +134,26 @@ def test_solve_completely(A : np.ndarray, b : np.ndarray) -> None:
     # Generate a random value for the coefficient for xn
     c : np.ndarray = np.random.rand(1)
     # Choose one of the vectors in xn at random
-    i : int = np.random.randint(0, len(xn))
+    i : int = np.random.randint(0, len(xn[0]))
     # Check if solving using xp and xn gives correct b
-    try:
-        assert np.allclose(b, A.dot(xp) + A.dot((c * xn[i])))
-    except AssertionError:
-        print(f"matrix {A} with solution {b} did not produce the correct x")
+    assert np.allclose(b, A.dot(xp) + A.dot((c * xn[:,i])))
+
 
 def generate_random_system(shape : Tuple[int, int], pivots : List[int]) -> Tuple[np.ndarray, np.ndarray]:
+    """Generates a random system Ax = b with give A matrix shape and pivot cols
+
+    Parameters
+    ----------
+    shape : Tuple[int, int]
+        The shape of the matrix m x n
+    pivots: List[int]
+        A list of pivot cols with their index corresponding to their row
+
+    Returns
+    -------
+    Tuple[numpy.ndarray, numpy.ndarray]
+        A tuple with matrix A and vector b with at least 1 solution
+    """
     A : np.ndarray = np.zeros(shape)
     num_rows : int = len(A)
     num_cols : int = len(A[0])
@@ -142,13 +161,17 @@ def generate_random_system(shape : Tuple[int, int], pivots : List[int]) -> Tuple
     for pivot_col in pivots:
         A[:,pivot_col] = np.random.randn(num_rows)
 
-    # Make free columns into linear combinations of pivot cols
+    # Make free columns into linear combinations of cols that came before
     for i in range(num_cols):
         if i not in pivots:
-            # free_col = np.zeros(num_rows)
-            # # for pivot_col in pivots:
-            # #     free_col += np.random.rand(1) * A[:, pivot_col]
-            A[:,i] = np.random.rand(1) * A[:, pivots[0]]
+            if i == 0:
+                free_col = np.random.randn(num_rows)
+                free_col[0] = 0
+            else:
+                free_col = np.zeros(num_rows)
+                for j in range(i):
+                    free_col += np.random.rand(1) * A[:, j]
+            A[:,i] = free_col
 
     # Create a b given a solution x
     x = np.zeros(num_cols)
@@ -159,3 +182,25 @@ def generate_random_system(shape : Tuple[int, int], pivots : List[int]) -> Tuple
     b = A.dot(x)
 
     return A, b
+
+def test_solve_completely_on_random() -> None:
+    """Tests solve completely on random matrices of various shapes and with various
+    pivot columns. Will print passes and failures after the test.
+    """
+    # Generate a bunch of shapes and pivot columns
+    shapes = [(1,2), (2, 2), (3, 2), (4, 2), (2,3), (3,3), (4,3), (3, 4),\
+         (4,4), (4,5), (5,4), (5,5)]
+    pivot_sets = [[0], [0,1], [1], [0], [0, 2], [0, 1], [0, 1, 2], [0, 3],\
+         [0, 1, 2], [0, 1, 2, 3], [2, 3], [0, 1, 2, 3]]
+
+    passes = 0
+    failures = 0
+    for shape, pivots in zip(shapes, pivot_sets):
+        A, b = generate_random_system(shape, pivots)
+        try:
+            test_solve_completely(A, b)
+            passes += 1
+        except AssertionError:
+            print(f"matrix \n{A} \nwith solution \n{b} \ndid not produce the correct x")
+            failures += 1
+    print(f"Tests Passed: {passes} \nTests Failed: {failures}")
